@@ -4,18 +4,21 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
+	dotenv "github.com/joho/godotenv"
 	cron "github.com/robfig/cron/v3"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-var MONGO_URI = "mongodb+srv://jacob:6u0IzoM4WxkVH3cV@cluster0.trdyd.mongodb.net/go_ag_test"
-
 func main() {
-	client, ctx := mongo_init()
+	dotenv.Load()
+	var MONGO_URI = os.Getenv("MONGO_URI")
+
+	client, ctx := mongo_init(MONGO_URI)
 	defer client.Disconnect(ctx)
 
 	database := client.Database("golang_aggregation_demo")
@@ -35,6 +38,7 @@ func exec_aggregation(presenceCollection *mongo.Collection, ctx context.Context)
 	projectStage := bson.D{
 		{"$project", bson.D{
 			{"activityThreshold", 1},
+			{"activity", 1},
 			{"lastseen", 1},
 			{"isInactive", bson.D{
 				{"$lte", bson.A{
@@ -67,8 +71,8 @@ func activity_cron(presenceCollection *mongo.Collection, ctx context.Context) {
 	c.Start()
 }
 
-func mongo_init() (*mongo.Client, context.Context) {
-	client, err := mongo.NewClient(options.Client().ApplyURI(MONGO_URI))
+func mongo_init(mongo_uri string) (*mongo.Client, context.Context) {
+	client, err := mongo.NewClient(options.Client().ApplyURI(mongo_uri))
 	if err != nil {
 		log.Fatal(err)
 	}
