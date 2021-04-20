@@ -29,7 +29,7 @@ func main() {
 }
 
 func exec_aggregation(presenceCollection *mongo.Collection, ctx context.Context) bool {
-	type PodcastEpisode struct {
+	type Result struct {
 		ActivityThreshold int64     `bson:"activityThreshold,omitempty"`
 		LastSeen          time.Time `bson:"lastseen,omitempty"`
 		IsInactive        bool      `bson:"isInactive,omitempty"`
@@ -55,7 +55,7 @@ func exec_aggregation(presenceCollection *mongo.Collection, ctx context.Context)
 	if err != nil {
 		panic(err)
 	}
-	var showsLoadedStruct []PodcastEpisode
+	var showsLoadedStruct []Result
 	if err = showLoadedStructCursor.All(ctx, &showsLoadedStruct); err != nil {
 		panic(err)
 	}
