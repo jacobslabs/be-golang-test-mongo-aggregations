@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"time"
 
 	dotenv "github.com/joho/godotenv"
 	cron "github.com/robfig/cron/v3"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -29,43 +29,51 @@ func main() {
 }
 
 func exec_aggregation(presenceCollection *mongo.Collection, ctx context.Context) bool {
-	type Result struct {
-		ActivityThreshold int64     `bson:"activityThreshold,omitempty"`
-		LastSeen          time.Time `bson:"lastseen,omitempty"`
-		IsInactive        bool      `bson:"isInactive,omitempty"`
+	type ResultCollection struct {
+		ID primitive.ObjectID `bson:"_id,omitempty"`
 	}
 
 	projectStage := bson.D{
-		{"$project", bson.D{
-			{"activityThreshold", 1},
-			{"activity", 1},
-			{"lastseen", 1},
-			{"isInactive", bson.D{
-				{"$lte", bson.A{
+		{Key: "$project", Value: bson.D{
+			{Key: "isInactive", Value: bson.D{
+				{Key: "$lte", Value: bson.A{
 					"$activityThreshold", bson.D{
-						{"$subtract", bson.A{"$$NOW", "$lastseen"}},
+						{Key: "$subtract", Value: bson.A{"$$NOW", "$lastseen"}},
 					}},
 				}},
 			}},
-		}}
-	matchStage := bson.D{{"$match", bson.D{{"isInactive", true}}}}
-	setStage := bson.D{{"$set", bson.D{{"activity", 666}}}}
+		},
+	}
+	matchStage := bson.D{{Key: "$match", Value: bson.D{{Key: "isInactive", Value: true}}}}
 
-	showLoadedStructCursor, err := presenceCollection.Aggregate(ctx, mongo.Pipeline{projectStage, matchStage, setStage})
+	showLoadedStructCursor, err := presenceCollection.Aggregate(ctx, mongo.Pipeline{projectStage, matchStage})
 	if err != nil {
 		panic(err)
 	}
-	var showsLoadedStruct []Result
-	if err = showLoadedStructCursor.All(ctx, &showsLoadedStruct); err != nil {
+	var loadedStruct []ResultCollection
+	if err = showLoadedStructCursor.All(ctx, &loadedStruct); err != nil {
 		panic(err)
 	}
-	fmt.Println(showsLoadedStruct)
+
+	var idSlice []primitive.ObjectID
+	for _, item := range loadedStruct {
+		idSlice = append(idSlice, item.ID)
+	}
+
+	presenceCollection.UpdateMany(ctx,
+		bson.M{"_id": bson.M{"$in": idSlice}},
+		bson.M{"$set": bson.M{"activity": 777}},
+	)
+	fmt.Println(idSlice)
 	return true
 }
 
 func activity_cron(presenceCollection *mongo.Collection, ctx context.Context) {
+	duration := os.Getenv("DURATION")
+	repeats := fmt.Sprintf("@every %ss", duration)
+
 	c := cron.New()
-	c.AddFunc("@every 10s", func() {
+	c.AddFunc(repeats, func() {
 		exec_aggregation(presenceCollection, ctx)
 	})
 	c.Start()
