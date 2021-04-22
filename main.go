@@ -16,19 +16,19 @@ import (
 
 func main() {
 	dotenv.Load()
-	var MONGO_URI = os.Getenv("MONGO_URI")
+	var mongoURI = os.Getenv("MONGO_URI")
 
-	client, ctx := mongo_init(MONGO_URI)
+	client, ctx := mongoInit(mongoURI)
 	defer client.Disconnect(ctx)
 
 	database := client.Database("golang_aggregation_demo")
 	presenceCollection := database.Collection("presence")
 
-	go activity_cron(presenceCollection, ctx)
+	go activityCron(ctx, presenceCollection)
 	select {}
 }
 
-func exec_aggregation(presenceCollection *mongo.Collection, ctx context.Context) bool {
+func execAggregation(ctx context.Context, presenceCollection *mongo.Collection) bool {
 	type ResultCollection struct {
 		ID primitive.ObjectID `bson:"_id,omitempty"`
 	}
@@ -68,19 +68,19 @@ func exec_aggregation(presenceCollection *mongo.Collection, ctx context.Context)
 	return true
 }
 
-func activity_cron(presenceCollection *mongo.Collection, ctx context.Context) {
+func activityCron(ctx context.Context, presenceCollection *mongo.Collection) {
 	duration := os.Getenv("DURATION")
 	repeats := fmt.Sprintf("@every %ss", duration)
 
 	c := cron.New()
 	c.AddFunc(repeats, func() {
-		exec_aggregation(presenceCollection, ctx)
+		execAggregation(ctx, presenceCollection)
 	})
 	c.Start()
 }
 
-func mongo_init(mongo_uri string) (*mongo.Client, context.Context) {
-	client, err := mongo.NewClient(options.Client().ApplyURI(mongo_uri))
+func mongoInit(mongoURI string) (*mongo.Client, context.Context) {
+	client, err := mongo.NewClient(options.Client().ApplyURI(mongoURI))
 	if err != nil {
 		log.Fatal(err)
 	}
